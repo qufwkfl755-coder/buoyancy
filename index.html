@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>중1 과학 가상 실험 - 물속에서 부력 측정하기</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js for real-time MBL graph -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- html2canvas for Report Image Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800&display=swap');
+    body {
+      font-family: 'Pretendard', sans-serif;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    /* 물결 애니메이션 */
+    @keyframes waveMotion {
+      0% { transform: translateX(0); }
+      50% { transform: translateX(-25%); }
+      100% { transform: translateX(0); }
+    }
+    .water-wave {
+      animation: waveMotion 4s ease-in-out infinite;
+    }
+    /* 드래그 슬라이더 커스텀 */
+    .slider-thumb::-webkit-slider-thumb {
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #2563eb;
+      cursor: grab;
+      border: 2px solid white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .slider-thumb::-webkit-slider-thumb:active {
+      cursor: grabbing;
+      transform: scale(1.15);
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-indigo-600 text-white shadow-md px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="bg-indigo-800 p-2 rounded-xl text-yellow-300">
+        <i class="fa-solid fa-flask-vial text-xl"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-lg sm:text-xl leading-tight">물속에서 부력 측정하기</h1>
+        <p class="text-xs text-indigo-200">중학교 1학년 과학 5. 힘의 작용 (교과서 p.172)</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="toggle-vectors" class="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-700 text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center gap-1.5">
+        <i class="fa-solid fa-arrows-up-down"></i> <span id="vector-btn-text">힘 화살표 켜기</span>
+      </button>
+      <button id="download-report-btn" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center gap-1.5">
+        <i class="fa-solid fa-camera"></i> <span>보고서 캡처 저장</span>
+      </button>
+      <button id="reset-btn" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-xs sm:text-sm font-semibold rounded-lg shadow transition flex items-center gap-1">
+        <i class="fa-solid fa-rotate-right"></i> 초기화
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- Left: Virtual Lab Canvas & Control Area (7 Cols) -->
+    <div class="lg:col-span-7 flex flex-col gap-4">
+      
+      <!-- Simulation Stage Card -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col relative overflow-hidden">
+        
+        <!-- Quick State Preset Tabs -->
+        <div class="flex flex-wrap items-center justify-between pb-3 border-b border-slate-100 mb-2 gap-2">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <i class="fa-solid fa-location-crosshairs mr-1"></i> 위치 프리셋
+          </span>
+          <div class="flex flex-wrap gap-1.5">
+            <button onclick="setImmersionState(0)" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-blue-100 text-slate-700 transition" id="preset-0">
+              (가) 공기 중
+            </button>
+            <button onclick="setImmersionState(0.5)" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-amber-100 text-slate-700 transition" id="preset-50">
+              (나) 절반 잠김
+            </button>
+            <button onclick="setImmersionState(1.0)" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-emerald-100 text-slate-700 transition" id="preset-100">
+              (다) 완전 잠김
+            </button>
+            <button onclick="setImmersionState(1.5)" class="px-2.5 py-1 text-xs font-bold rounded-md bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition" id="preset-deep">
+              <i class="fa-solid fa-water-ladder text-[10px] mr-1"></i>(라) 더 깊은 곳
+            </button>
+          </div>
+        </div>
+
+        <!-- Interactive Visual Area -->
+        <div class="relative w-full h-[430px] bg-gradient-to-b from-sky-50 to-white rounded-xl border border-slate-200 flex items-center justify-center overflow-hidden" id="canvas-container">
+          
+          <!-- SVG Apparatus Layout -->
+          <svg id="lab-svg" class="w-full h-full" viewBox="0 0 520 480" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <!-- Metallic Gradient for Stand -->
+              <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#94a3b8" />
+                <stop offset="50%" stop-color="#f1f5f9" />
+                <stop offset="100%" stop-color="#64748b" />
+              </linearGradient>
+              <!-- Brass Metal for Weight -->
+              <linearGradient id="brassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#b45309" />
+                <stop offset="30%" stop-color="#fde047" />
+                <stop offset="70%" stop-color="#ca8a04" />
+                <stop offset="100%" stop-color="#78350f" />
+              </linearGradient>
+              <!-- Water Gradient with transparency -->
+              <linearGradient id="waterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.55" />
+                <stop offset="100%" stop-color="#0284c7" stop-opacity="0.8" />
+              </linearGradient>
+              <!-- Glass Sheen -->
+              <linearGradient id="glassSheen" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.4" />
+                <stop offset="30%" stop-color="#ffffff" stop-opacity="0.1" />
+                <stop offset="80%" stop-color="#ffffff" stop-opacity="0" />
+                <stop offset="100%" stop-color="#ffffff" stop-opacity="0.3" />
+              </linearGradient>
+              <!-- Arrow marker for vectors -->
+              <marker id="arrowUp" markerWidth="8" markerHeight="8" refX="4" refY="2" orient="auto">
+                <polygon points="0,6 4,0 8,6" fill="#10b981" />
+              </marker>
+              <marker id="arrowDown" markerWidth="8" markerHeight="8" refX="4" refY="6" orient="auto">
+                <polygon points="0,0 4,6 8,0" fill="#ef4444" />
+              </marker>
+            </defs>
+
+            <!-- 1. Stand Base & Vertical Rod -->
+            <rect x="50" y="445" width="410" height="22" rx="4" fill="#334155" stroke="#1e293b" stroke-width="2" />
+            <rect x="235" y="15" width="16" height="430" rx="3" fill="url(#metalGrad)" stroke="#475569" stroke-width="1.5" />
+            <!-- Rod Cap Knob -->
+            <circle cx="243" cy="15" r="8" fill="#1e293b" />
+
+            <!-- 2. Beaker and Water (Fixed on Base) -->
+            <!-- Beaker coordinates: X: 110 ~ 290, Top Y: 215, Bottom Y: 445 -->
+            <!-- Water Layer (Dynamically rises with submersion) -->
+            <rect id="water-rect" x="117" y="315" width="166" height="128" rx="4" fill="url(#waterGrad)" />
+            <!-- Water Meniscus / Waves -->
+            <ellipse id="water-surface" cx="200" cy="315" rx="83" ry="7" fill="#bae6fd" opacity="0.85" />
+
+            <!-- Beaker Glass Outer Outline -->
+            <path d="M 115 215 L 115 440 A 6 6 0 0 0 121 445 L 279 445 A 6 6 0 0 0 285 440 L 285 215" 
+                  fill="url(#glassSheen)" stroke="#94a3b8" stroke-width="3" stroke-linecap="round" />
+            <ellipse cx="200" cy="215" rx="85" ry="8" fill="none" stroke="#94a3b8" stroke-width="2.5" />
+            
+            <!-- Beaker Graduations (Tick Marks) with Live Volume Marker -->
+            <g stroke="#64748b" stroke-width="1.5" opacity="0.7">
+              <line x1="118" y1="395" x2="135" y2="395" />
+              <text x="140" y="399" font-size="9" fill="#64748b" font-weight="bold">100mL</text>
+              <line x1="118" y1="355" x2="138" y2="355" />
+              <line x1="118" y1="315" x2="142" y2="315" stroke="#0284c7" stroke-width="2" />
+              <text x="146" y="319" font-size="10" fill="#0369a1" font-weight="bold">200mL (초기 수면)</text>
+              <line x1="118" y1="275" x2="142" y2="275" />
+              <text x="146" y="279" font-size="9" fill="#64748b" font-weight="bold">300mL</text>
+              <line x1="118" y1="235" x2="135" y2="235" />
+            </g>
+
+            <!-- Dynamic Water Level Arrow Indicator & Readout -->
+            <g id="water-level-tag" transform="translate(0, 0)">
+              <polygon points="105,315 113,310 113,320" fill="#0284c7" />
+              <rect x="8" y="303" width="94" height="24" rx="5" fill="#0284c7" />
+              <text id="water-vol-text" x="55" y="319" text-anchor="middle" font-size="10.5" fill="#ffffff" font-weight="bold">200 mL</text>
+            </g>
+
+            <!-- 3. Movable Assembly (Sensor + Clamp + String + Weight) -->
+            <g id="movable-group" transform="translate(0, 0)">
+              <!-- Clamp on Stand Rod -->
+              <rect x="228" y="70" width="30" height="24" rx="3" fill="#1e293b" />
+              <!-- Tightening Knob (Right) -->
+              <rect x="258" y="77" width="16" height="10" rx="2" fill="#475569" />
+              <circle cx="274" cy="82" r="7" fill="#0f172a" />
+              <!-- Arm connecting Clamp to Sensor -->
+              <line x1="228" y1="82" x2="200" y2="82" stroke="#334155" stroke-width="8" stroke-linecap="round" />
+
+              <!-- Digital Force Sensor Body -->
+              <rect x="150" y="40" width="100" height="85" rx="8" fill="#1e3a8a" stroke="#1d4ed8" stroke-width="2" />
+              <!-- Sensor Label / Faceplate -->
+              <rect x="160" y="50" width="80" height="65" rx="4" fill="#3b82f6" />
+              <text x="200" y="68" text-anchor="middle" font-size="11" fill="#ffffff" font-weight="bold">힘 센서 (MBL)</text>
+              
+              <!-- Sensor Display Panel inside sensor -->
+              <rect x="168" y="75" width="64" height="26" rx="4" fill="#0f172a" />
+              <text id="sensor-mini-lcd" x="200" y="93" text-anchor="middle" font-family="monospace" font-size="14" fill="#38bdf8" font-weight="bold">2.00 N</text>
+
+              <!-- Sensor Hook & Suspension String -->
+              <line x1="200" y1="125" x2="200" y2="137" stroke="#64748b" stroke-width="3" />
+              <path d="M 200 137 C 200 145, 192 145, 192 150 C 192 155, 204 157, 202 165" fill="none" stroke="#475569" stroke-width="2.5" />
+              
+              <!-- Suspension Wire -->
+              <line x1="200" y1="165" x2="200" y2="210" stroke="#71717a" stroke-width="1.8" />
+
+              <!-- Brass Weight (추) - Width: 54, Height: 70 -->
+              <g id="weight-graphic" cursor="grab">
+                <rect x="173" y="210" width="54" height="70" rx="5" fill="url(#brassGrad)" stroke="#854d0e" stroke-width="1.5" />
+                <rect x="170" y="208" width="60" height="4" rx="2" fill="#ca8a04" />
+                <rect x="170" y="278" width="60" height="4" rx="2" fill="#854d0e" />
+                <text x="200" y="246" text-anchor="middle" font-size="12" fill="#ffffff" font-weight="bold" opacity="0.95">추</text>
+                <text x="200" y="261" text-anchor="middle" font-size="9" fill="#fef08a">200g (2N)</text>
+              </g>
+
+              <!-- Force Vector Arrows (Toggled by user) -->
+              <g id="vector-arrows" class="hidden">
+                <!-- Gravity Vector (Downwards - Red) -->
+                <line x1="240" y1="245" x2="240" y2="335" stroke="#ef4444" stroke-width="3.5" marker-end="url(#arrowDown)" />
+                <text x="246" y="295" font-size="11" fill="#dc2626" font-weight="bold">중력: 2.00N</text>
+
+                <!-- Buoyancy Vector (Upwards - Green, dynamic height) -->
+                <line id="buoyancy-arrow-line" x1="160" y1="245" x2="160" y2="245" stroke="#10b981" stroke-width="3.5" marker-end="url(#arrowUp)" />
+                <text id="buoyancy-arrow-text" x="154" y="235" text-anchor="end" font-size="11" fill="#059669" font-weight="bold">부력: 0.00N</text>
+              </g>
+
+              <!-- Drag Handle Helper Indicator -->
+              <g id="drag-handle-hint" class="opacity-75">
+                <circle cx="200" cy="188" r="14" fill="#3b82f6" fill-opacity="0.3" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3,3" />
+                <path d="M 200 178 L 200 198 M 195 183 L 200 178 L 205 183 M 195 193 L 200 198 L 205 193" stroke="#1e40af" stroke-width="2" fill="none" stroke-linecap="round" />
+              </g>
+
+            </g>
+
+          </svg>
+
+          <!-- Interaction Touch/Drag Guide Badge -->
+          <div class="absolute bottom-3 left-3 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 shadow-sm flex items-center gap-1.5 pointer-events-none">
+            <i class="fa-solid fa-hand-pointer text-indigo-500 animate-bounce"></i>
+            추를 아래로 내려 잠긴 부피와 수면의 변화를 관찰하세요!
+          </div>
+
+          <!-- Immersion Status Chip -->
+          <div class="absolute top-3 right-3 bg-white/95 px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2">
+            <span id="immersion-indicator-dot" class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+            <span id="immersion-tag" class="text-xs font-bold text-slate-700">(가) 공기 중</span>
+          </div>
+
+          <!-- Displaced Water Badge (Archimedes link) -->
+          <div class="absolute top-3 left-3 bg-blue-50/95 border border-blue-200 px-3 py-1.5 rounded-xl shadow-sm flex items-center gap-2">
+            <i class="fa-solid fa-droplet text-blue-500"></i>
+            <span class="text-xs font-semibold text-slate-600">밀려난 물의 부피:</span>
+            <span id="displaced-vol-tag" class="text-xs font-mono font-bold text-blue-700">0 mL (0 N 상당)</span>
+          </div>
+
+          <!-- Misconception Alert Notice (Shown when in deep mode) -->
+          <div id="deep-notice" class="hidden absolute bottom-12 right-3 bg-purple-900/90 text-white text-[11px] p-2 rounded-lg max-w-[210px] shadow-lg animate-fade-in pointer-events-none">
+            <div class="font-bold text-purple-200 flex items-center gap-1 mb-0.5">
+              <i class="fa-solid fa-brain text-yellow-300"></i> 깊이 탐구 관찰 포인트
+            </div>
+            완전히 잠긴 후에는 더 깊이 내려가도 부력과 측정값이 변하지 않습니다!
+          </div>
+
+        </div>
+
+        <!-- Slider Control Bar -->
+        <div class="mt-4 px-2 flex flex-col gap-1.5">
+          <div class="flex justify-between text-xs font-bold text-slate-600">
+            <span>높이 조절 (스탠드 다이얼)</span>
+            <span id="submersion-percent-text" class="text-blue-600">잠긴 부피: 0%</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-arrow-up text-slate-400 text-sm"></i>
+            <input type="range" id="depth-slider" min="0" max="100" value="0" 
+                   class="slider-thumb w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer focus:outline-none">
+            <i class="fa-solid fa-arrow-down text-slate-400 text-sm"></i>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Live MBL Tablet Monitor Display -->
+      <div class="bg-slate-900 text-white rounded-2xl p-4 shadow-md border border-slate-800 flex flex-col">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
+            <span class="text-xs font-mono text-emerald-400 font-bold uppercase tracking-wider">MBL 스마트 데이터 수집기 연동됨</span>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 font-mono">
+            <span>주파수: 10Hz</span>
+            <span class="text-slate-600">|</span>
+            <span>단위: N (뉴턴)</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 my-1">
+          <!-- Digital Gauge 1: Weight (Gravity) - 원래 무게 (가장 왼쪽) -->
+          <div class="bg-slate-800/90 rounded-xl p-3 border border-slate-700/60 flex flex-col items-center justify-center">
+            <span class="text-xs text-slate-400 font-semibold mb-1">추의 원래 무게</span>
+            <span class="text-3xl font-mono font-black text-amber-400">2.00 N</span>
+            <span class="text-[11px] text-slate-400 mt-1">공기 중 무게 (일정)</span>
+          </div>
+          <!-- Digital Gauge 2: Current Sensor Reading - 힘 센서 측정값 (중간) -->
+          <div class="bg-slate-800/90 rounded-xl p-3 border border-slate-700/60 flex flex-col items-center justify-center">
+            <span class="text-xs text-slate-400 font-semibold mb-1">힘 센서 측정값</span>
+            <span id="live-force-val" class="text-3xl font-mono font-black text-cyan-400">2.00 N</span>
+            <span class="text-[11px] text-slate-400 mt-1">물체가 당기는 힘</span>
+          </div>
+          <!-- Digital Gauge 3: Calculated Buoyancy - 감소한 무게 (가장 오른쪽) -->
+          <div class="bg-slate-800/90 rounded-xl p-3 border border-slate-700/60 flex flex-col items-center justify-center">
+            <span class="text-xs text-slate-400 font-semibold mb-1">감소한 무게 (부력)</span>
+            <span id="live-buoyancy-val" class="text-3xl font-mono font-black text-emerald-400">0.00 N</span>
+            <span class="text-[11px] text-emerald-400/80 mt-1">↑ 물이 떠받치는 힘</span>
+          </div>
+        </div>
+
+        <!-- Real-time Chart Canvas -->
+        <div class="h-32 w-full mt-2 relative">
+          <canvas id="mbl-chart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right: Student Experiment Sheet & Guided Lab Log (5 Cols) -->
+    <div id="student-report-card" class="lg:col-span-5 flex flex-col gap-4">
+      
+      <!-- Experiment Table Card (교과서 172쪽 표 + 확장) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-table-cells text-indigo-600"></i>
+            <h2 class="font-bold text-slate-800 text-sm sm:text-base">탐구 기록표 (교과서 p.172)</h2>
+          </div>
+          <button id="auto-record-btn" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm transition flex items-center gap-1">
+            <i class="fa-solid fa-pen-clip"></i> 현재값 기록
+          </button>
+        </div>
+
+        <!-- Responsive Data Table -->
+        <div class="overflow-x-auto mt-3">
+          <table class="w-full text-xs text-center border-collapse">
+            <thead>
+              <tr class="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold">
+                <th class="p-2 border-r border-slate-200 text-left">구분</th>
+                <th class="p-2 border-r border-slate-200 bg-blue-50/50">
+                  <div>(가)</div>
+                  <div class="font-normal text-[11px] text-slate-500">잠기기 전</div>
+                </th>
+                <th class="p-2 border-r border-slate-200 bg-amber-50/50">
+                  <div>(나)</div>
+                  <div class="font-normal text-[11px] text-slate-500">절반 잠김</div>
+                </th>
+                <th class="p-2 border-r border-slate-200 bg-emerald-50/50">
+                  <div>(다)</div>
+                  <div class="font-normal text-[11px] text-slate-500">완전 잠김</div>
+                </th>
+                <th class="p-2 bg-purple-50/50">
+                  <div>(라)</div>
+                  <div class="font-normal text-[11px] text-purple-600 font-semibold">더 깊은 곳</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Row 1: Diagram Preview Miniatures -->
+              <tr class="border-b border-slate-200 text-slate-500">
+                <td class="p-2 font-semibold bg-slate-50 text-left border-r border-slate-200">측정 모습</td>
+                <td class="p-1 border-r border-slate-200">
+                  <span class="inline-block px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">공기 중</span>
+                </td>
+                <td class="p-1 border-r border-slate-200">
+                  <span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">1/2 잠김</span>
+                </td>
+                <td class="p-1 border-r border-slate-200">
+                  <span class="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">완전 잠김</span>
+                </td>
+                <td class="p-1">
+                  <span class="inline-block px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-bold">바닥 근처</span>
+                </td>
+              </tr>
+              <!-- Row 2: Displaced Volume -->
+              <tr class="border-b border-slate-200 bg-sky-50/30">
+                <td class="p-2 font-semibold text-slate-600 text-left border-r border-slate-200">
+                  밀려난 물(mL)
+                </td>
+                <td class="p-1 border-r border-slate-200 font-mono text-slate-500">0 mL</td>
+                <td class="p-1 border-r border-slate-200 font-mono text-amber-700 font-bold">+40 mL</td>
+                <td class="p-1 border-r border-slate-200 font-mono text-emerald-700 font-bold">+80 mL</td>
+                <td class="p-1 font-mono text-purple-700 font-bold">+80 mL</td>
+              </tr>
+              <!-- Row 3: Measured Values -->
+              <tr class="border-b border-slate-200">
+                <td class="p-2 font-semibold bg-slate-50 text-left border-r border-slate-200">
+                  측정값(N)
+                </td>
+                <td class="p-1 border-r border-slate-200">
+                  <input type="number" step="0.01" id="rec-val-a" placeholder="-" 
+                         class="w-14 text-center font-mono font-bold py-1 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-indigo-500">
+                </td>
+                <td class="p-1 border-r border-slate-200">
+                  <input type="number" step="0.01" id="rec-val-b" placeholder="-" 
+                         class="w-14 text-center font-mono font-bold py-1 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-indigo-500">
+                </td>
+                <td class="p-1 border-r border-slate-200">
+                  <input type="number" step="0.01" id="rec-val-c" placeholder="-" 
+                         class="w-14 text-center font-mono font-bold py-1 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-indigo-500">
+                </td>
+                <td class="p-1">
+                  <input type="number" step="0.01" id="rec-val-d" placeholder="-" 
+                         class="w-14 text-center font-mono font-bold py-1 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-indigo-500">
+                </td>
+              </tr>
+              <!-- Row 4: Reduced Value (Buoyancy) -->
+              <tr class="border-b border-slate-200">
+                <td class="p-2 font-semibold bg-slate-50 text-left border-r border-slate-200">
+                  <div>감소한 값(N)</div>
+                  <div class="text-[10px] text-slate-400 font-normal">[(가) - 측정값]</div>
+                </td>
+                <td class="p-1 border-r border-slate-200 bg-slate-100/70 text-slate-400 font-mono">
+                  ＼
+                </td>
+                <td class="p-1 border-r border-slate-200">
+                  <input type="number" step="0.01" id="rec-diff-b" placeholder="-" 
+                         class="w-14 text-center font-mono font-bold py-1 bg-amber-50/40 border border-amber-300 rounded text-amber-700">
+                </td>
+                <td class="p-1 border-r border-slate-200">
+                  <input type="number" step="0.01" id="rec-diff-c" placeholder="-" 
+                         class="w-14 text-center font-mono font-bold py-1 bg-emerald-50/40 border border-emerald-300 rounded text-emerald-700">
+                </td>
+                <td class="p-1">
+                  <input type="number" step="0.01" id="rec-diff-d" placeholder="-" 
+                         class="w-14 text-center font-mono font-bold py-1 bg-purple-50/40 border border-purple-300 rounded text-purple-700">
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Table Check Helper -->
+        <div class="mt-3 flex items-center justify-between">
+          <span id="table-feedback" class="text-xs font-semibold text-slate-500">실험을 진행하여 표의 빈칸을 채워보세요.</span>
+          <button id="verify-table-btn" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition">
+            기록표 정답 확인
+          </button>
+        </div>
+      </div>
+
+      <!-- Reflection & Conclusion Questions (교과서 172쪽 정리 1, 2, 3 + 오개념 4번) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col flex-1">
+        <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+          <i class="fa-solid fa-lightbulb text-amber-500"></i>
+          <h2 class="font-bold text-slate-800 text-sm sm:text-base">탐구 정리하기 & 깊이 생각하기</h2>
+        </div>
+
+        <div class="flex flex-col gap-3.5 mt-3 text-xs sm:text-sm">
+          
+          <!-- Question 1 -->
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+            <p class="font-bold text-slate-800 mb-1.5 leading-snug">
+              1. (나), (다)에서 힘 센서 측정값이 (가)에 비해 감소한 까닭은 무엇인가요?
+            </p>
+            <div class="space-y-1 text-slate-700">
+              <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-white">
+                <input type="radio" name="q1" value="w" class="text-indigo-600">
+                <span>물의 온도가 변해서 추가 가벼워졌기 때문</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-white">
+                <input type="radio" name="q1" value="c" class="text-indigo-600">
+                <span>물이 추를 위쪽 방향으로 떠받치는 힘(부력)이 작용했기 때문</span>
+              </label>
+            </div>
+            <p id="q1-feedback" class="hidden text-xs mt-1.5 font-bold"></p>
+          </div>
+
+          <!-- Question 2 -->
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+            <p class="font-bold text-slate-800 mb-1.5 leading-snug">
+              2. (나), (다)에서 추에 작용하는 부력의 크기는 각각 얼마인가요?
+            </p>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-between">
+                <label for="input-ans2-b" class="text-slate-600 font-semibold">(나) 절반 잠김:</label>
+                <div class="flex items-center gap-1">
+                  <input type="number" step="0.01" id="input-ans2-b" placeholder="0.00" 
+                         class="w-16 text-center font-mono font-bold py-1 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-indigo-500">
+                  <span class="font-bold text-slate-700">N</span>
+                </div>
+              </div>
+              <div class="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-between">
+                <label for="input-ans2-c" class="text-slate-600 font-semibold">(다) 완전 잠김:</label>
+                <div class="flex items-center gap-1">
+                  <input type="number" step="0.01" id="input-ans2-c" placeholder="0.00" 
+                         class="w-16 text-center font-mono font-bold py-1 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-indigo-500">
+                  <span class="font-bold text-slate-700">N</span>
+                </div>
+              </div>
+            </div>
+            <p id="q2-feedback" class="hidden text-xs mt-1.5 font-bold"></p>
+          </div>
+
+          <!-- Question 3 -->
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+            <p class="font-bold text-slate-800 mb-1.5 leading-snug">
+              3. 물에 잠긴 추의 부피와 부력의 크기는 어떤 관계가 있나요?
+            </p>
+            <div class="space-y-1 text-slate-700">
+              <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-white">
+                <input type="radio" name="q3" value="c" class="text-indigo-600">
+                <span>물에 잠긴 물체의 부피가 클수록 밀려난 물이 많아져 부력이 더 커진다.</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-white">
+                <input type="radio" name="q3" value="w" class="text-indigo-600">
+                <span>물에 잠긴 물체의 부피와 상관없이 부력의 크기는 항상 일정하다.</span>
+              </label>
+            </div>
+            <p id="q3-feedback" class="hidden text-xs mt-1.5 font-bold"></p>
+          </div>
+
+          <!-- Question 4: Misconception Depth Question -->
+          <div class="p-3 bg-purple-50 rounded-xl border border-purple-200">
+            <div class="flex items-center gap-1.5 text-purple-900 font-bold mb-1.5 leading-snug">
+              <span class="px-1.5 py-0.5 rounded bg-purple-600 text-white text-[10px]">오개념 탈출</span>
+              <span>4. (다)처럼 완전히 잠긴 후, (라)처럼 더 깊은 곳으로 내려가면 부력은 어떻게 될까요?</span>
+            </div>
+            <div class="space-y-1 text-slate-700 text-xs">
+              <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-white">
+                <input type="radio" name="q4" value="same" class="text-purple-600">
+                <span>밀려난 물의 부피가 변하지 않으므로 부력의 크기는 변함없이 같다.</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-white">
+                <input type="radio" name="q4" value="more" class="text-purple-600">
+                <span>수압이 세지고 물이 더 깊으므로 부력이 더 커진다.</span>
+              </label>
+            </div>
+            <p id="q4-feedback" class="hidden text-xs mt-1.5 font-bold"></p>
+          </div>
+
+          <!-- Conclusion Submit Button -->
+          <button id="check-quiz-btn" class="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold rounded-xl shadow-md transition text-xs sm:text-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-award"></i>
+            <span>탐구 결론 제출 및 최종 평가 확인</span>
+          </button>
+
+          <!-- Overall Feedback Modal Box (Embedded) -->
+          <div id="eval-result-box" class="hidden p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl">
+            <div class="flex items-center justify-between text-emerald-800 font-bold mb-1.5">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-emerald-600 text-base"></i>
+                <span class="text-sm">축하합니다! 탐구 목표 완벽 달성</span>
+              </div>
+              <span class="text-[11px] bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-mono">100점</span>
+            </div>
+            <p class="text-xs text-emerald-900 leading-relaxed">
+              <strong>핵심 과학 개념 정리:</strong><br>
+              1. <strong>부력의 방향과 크기:</strong> 물속에 들어간 물체는 위쪽 방향으로 부력을 받아 무게가 감소합니다.<br>
+              2. <strong>부피와 부력:</strong> 부력은 <strong>물에 잠긴 물체의 부피(밀려난 물의 양)</strong>에만 비례합니다.<br>
+              3. <strong>깊이와의 관계:</strong> 물체 전체가 완전히 잠긴 후에는 <strong>아무리 깊이 내려가도 부력의 크기가 변하지 않습니다!</strong>
+            </p>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Interactive JavaScript Engine -->
+  <script>
+    /* =========================================================================
+     * 1. 실험 물리 상수 및 시스템 상태 정의
+     * ========================================================================= */
+    const PHYSICS = {
+      WEIGHT_IN_AIR: 2.00,       // 공기 중 추의 무게 (N)
+      MAX_BUOYANCY: 0.80,        // 완전히 잠겼을 때 최대 부력 (N)
+      WEIGHT_HEIGHT_PX: 70,      // SVG 상 추의 세로 길이 (px)
+      BASE_WATER_SURFACE_Y: 315, // 초기 수면 Y 좌표 (200mL 기준)
+      MAX_WATER_RISE_PX: 20,     // 최대 수면 상승 폭 (80mL 배제 시 20px 상승)
+      MAX_TRANSLATE_Y: 175       // 최대로 바닥 가까이 내렸을 때 오프셋 (깊이 탐구용)
+    };
+
+    // 현재 시뮬레이션 상태 변수
+    let currentTranslateY = 0;   // SVG 그룹 Y 이동량 (px)
+    let submersionRatio = 0.0;   // 0.0 (공기 중) ~ 1.0 (완전 잠김)
+    let currentForce = 2.00;     // 센서 측정값 (N)
+    let currentBuoyancy = 0.00;  // 부력 (N)
+    let showVectors = false;     // 힘 화살표 표시 토글
+
+    // DOM 요소 캐싱
+    const movableGroup = document.getElementById('movable-group');
+    const depthSlider = document.getElementById('depth-slider');
+    const sensorMiniLcd = document.getElementById('sensor-mini-lcd');
+    const liveForceVal = document.getElementById('live-force-val');
+    const liveBuoyancyVal = document.getElementById('live-buoyancy-val');
+    const submersionPercentText = document.getElementById('submersion-percent-text');
+    const immersionTag = document.getElementById('immersion-tag');
+    const immersionDot = document.getElementById('immersion-indicator-dot');
+    const vectorArrows = document.getElementById('vector-arrows');
+    const buoyancyArrowLine = document.getElementById('buoyancy-arrow-line');
+    const buoyancyArrowText = document.getElementById('buoyancy-arrow-text');
+    const waterRect = document.getElementById('water-rect');
+    const waterSurface = document.getElementById('water-surface');
+    const waterLevelTag = document.getElementById('water-level-tag');
+    const waterVolText = document.getElementById('water-vol-text');
+    const displacedVolTag = document.getElementById('displaced-vol-tag');
+    const deepNotice = document.getElementById('deep-notice');
+
+    /* =========================================================================
+     * 2. Chart.js 실시간 MBL 그래프 구성
+     * ========================================================================= */
+    const ctx = document.getElementById('mbl-chart').getContext('2d');
+    const maxDataPoints = 35;
+    const timeLabels = Array.from({ length: maxDataPoints }, (_, i) => '');
+    const forceDataSeries = Array(maxDataPoints).fill(2.00);
+
+    const mblChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: timeLabels,
+        datasets: [{
+          label: '힘 센서 측정값(N)',
+          data: forceDataSeries,
+          borderColor: '#38bdf8',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2,
+          fill: true,
+          backgroundColor: 'rgba(56, 189, 248, 0.1)'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 0 },
+        scales: {
+          x: { display: false },
+          y: {
+            min: 0.8,
+            max: 2.4,
+            grid: { color: 'rgba(255, 255, 255, 0.08)' },
+            ticks: {
+              color: '#94a3b8',
+              font: { family: 'monospace', size: 10 },
+              stepSize: 0.4
+            }
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+
+    // 100ms 주기로 MBL 데이터 갱신 (리얼타임 센서 효과)
+    setInterval(() => {
+      const noise = (Math.random() - 0.5) * 0.01;
+      const displayVal = Math.max(0, currentForce + (submersionRatio > 0 ? noise : 0));
+      forceDataSeries.push(Number(displayVal.toFixed(2)));
+      forceDataSeries.shift();
+      mblChart.update();
+    }, 100);
+
+    /* =========================================================================
+     * 3. 물리 연산 및 시뮬레이션 동기화 엔진 (수면 상승 & 오개념 깊이 반영)
+     * ========================================================================= */
+    function updatePhysics(translateY) {
+      currentTranslateY = translateY;
+      
+      // 추의 초기 위치: 윗면 210px, 아랫면 280px (높이 70px)
+      const weightBottomY = 280 + translateY;
+      const weightTopY = 210 + translateY;
+      
+      // 잠김 비율 계산 (초기 수면 315px 기준)
+      // translateY = 35일 때 아랫면이 315px에 닿음
+      // translateY = 105일 때 윗면(210+105=315px)까지 잠김 (완전 잠김)
+      // translateY > 105일 때는 완전히 잠긴 채 깊이만 더 깊어짐
+      if (weightBottomY <= 315) {
+        submersionRatio = 0.0;
+      } else if (weightTopY >= 315) {
+        submersionRatio = 1.0;
+      } else {
+        const submergedLength = weightBottomY - 315;
+        submersionRatio = Math.min(1.0, Math.max(0.0, submergedLength / PHYSICS.WEIGHT_HEIGHT_PX));
+      }
+
+      // 부력 및 센서 측정값 계산: 측정값 = 중력 - 부력
+      // 완전히 잠긴 후(submersionRatio === 1.0) 더 깊이 내려가도 부력은 MAX_BUOYANCY로 일정!
+      currentBuoyancy = submersionRatio * PHYSICS.MAX_BUOYANCY;
+      currentForce = PHYSICS.WEIGHT_IN_AIR - currentBuoyancy;
+
+      // 그래픽 요소 위치 변환
+      movableGroup.setAttribute('transform', `translate(0, ${translateY})`);
+
+      // 1) 비커 수면 실시간 상승 효과 (3번 기능: 밀어낸 부피 시각화)
+      const waterRise = submersionRatio * PHYSICS.MAX_WATER_RISE_PX; // 0 ~ 20px 상승
+      const currentSurfaceY = PHYSICS.BASE_WATER_SURFACE_Y - waterRise;
+      const newWaterHeight = 128 + waterRise;
+
+      waterRect.setAttribute('y', currentSurfaceY);
+      waterRect.setAttribute('height', newWaterHeight);
+      waterSurface.setAttribute('cy', currentSurfaceY);
+      waterLevelTag.setAttribute('transform', `translate(0, ${-waterRise})`);
+
+      // 비커 수량 텍스트 (200mL + 최대 80mL = 280mL)
+      const currentVolume = Math.round(200 + (submersionRatio * 80));
+      const displacedVolume = Math.round(submersionRatio * 80);
+      waterVolText.textContent = `${currentVolume} mL`;
+      displacedVolTag.textContent = `${displacedVolume} mL (${currentBuoyancy.toFixed(2)} N 상당)`;
+
+      // 텍스트 및 게이지 UI 동기화
+      const forceStr = currentForce.toFixed(2);
+      const buoyancyStr = currentBuoyancy.toFixed(2);
+      const percentStr = Math.round(submersionRatio * 100);
+
+      sensorMiniLcd.textContent = `${forceStr} N`;
+      liveForceVal.textContent = `${forceStr} N`;
+      liveBuoyancyVal.textContent = `${buoyancyStr} N`;
+      submersionPercentText.textContent = `잠긴 부피: ${percentStr}%`;
+
+      // 2) 상태 태그 및 깊이 안내 업데이트 (1번 오개념 요소)
+      if (submersionRatio === 0) {
+        immersionTag.textContent = '(가) 공기 중';
+        immersionTag.className = 'text-xs font-bold text-blue-600';
+        immersionDot.className = 'w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse';
+        deepNotice.classList.add('hidden');
+      } else if (submersionRatio > 0.45 && submersionRatio < 0.55) {
+        immersionTag.textContent = '(나) 절반 잠김 (50%)';
+        immersionTag.className = 'text-xs font-bold text-amber-600';
+        immersionDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse';
+        deepNotice.classList.add('hidden');
+      } else if (submersionRatio >= 0.99 && translateY < 130) {
+        immersionTag.textContent = '(다) 완전 잠김 (100%)';
+        immersionTag.className = 'text-xs font-bold text-emerald-600';
+        immersionDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+        deepNotice.classList.add('hidden');
+      } else if (translateY >= 130) {
+        // 더 깊이 내려간 상태
+        immersionTag.textContent = '(라) 더 깊은 곳 (부력 동일!)';
+        immersionTag.className = 'text-xs font-bold text-purple-700';
+        immersionDot.className = 'w-2.5 h-2.5 rounded-full bg-purple-500 animate-ping';
+        deepNotice.classList.remove('hidden');
+      } else {
+        immersionTag.textContent = `물에 들어가는 중 (${percentStr}%)`;
+        immersionTag.className = 'text-xs font-bold text-indigo-600';
+        immersionDot.className = 'w-2.5 h-2.5 rounded-full bg-indigo-500';
+        deepNotice.classList.add('hidden');
+      }
+
+      // 힘 벡터 화살표 크기 조절
+      if (showVectors) {
+        const arrowLength = (currentBuoyancy / PHYSICS.MAX_BUOYANCY) * 90;
+        const arrowStartY = 245;
+        const arrowEndY = arrowStartY - arrowLength;
+
+        if (currentBuoyancy > 0.02) {
+          buoyancyArrowLine.setAttribute('y2', arrowEndY);
+          buoyancyArrowLine.style.display = 'block';
+          buoyancyArrowText.setAttribute('y', arrowEndY - 8);
+          buoyancyArrowText.textContent = `부력: ${buoyancyStr}N`;
+          buoyancyArrowText.style.display = 'block';
+        } else {
+          buoyancyArrowLine.style.display = 'none';
+          buoyancyArrowText.style.display = 'none';
+        }
+      }
+
+      // 슬라이더 바 값 동기화
+      const targetSliderVal = Math.round((translateY / PHYSICS.MAX_TRANSLATE_Y) * 100);
+      if (Math.abs(depthSlider.value - targetSliderVal) > 1) {
+        depthSlider.value = targetSliderVal;
+      }
+    }
+
+    /* =========================================================================
+     * 4. 드래그 앤 드롭 및 터치 인터랙션 (크롬북 최적화)
+     * ========================================================================= */
+    let isDragging = false;
+    let startPointerY = 0;
+    let startTranslateY = 0;
+
+    const weightGraphic = document.getElementById('weight-graphic');
+
+    function onPointerDown(e) {
+      isDragging = true;
+      startPointerY = e.clientY || (e.touches && e.touches[0].clientY);
+      startTranslateY = currentTranslateY;
+      weightGraphic.style.cursor = 'grabbing';
+      if (e.cancelable && e.type.startsWith('touch')) {
+        e.preventDefault();
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!isDragging) return;
+      const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+      const deltaY = clientY - startPointerY;
+      
+      let nextY = startTranslateY + deltaY;
+      nextY = Math.max(0, Math.min(PHYSICS.MAX_TRANSLATE_Y, nextY));
+      updatePhysics(nextY);
+    }
+
+    function onPointerUp() {
+      if (isDragging) {
+        isDragging = false;
+        weightGraphic.style.cursor = 'grab';
+      }
+    }
+
+    weightGraphic.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+
+    weightGraphic.addEventListener('touchstart', onPointerDown, { passive: false });
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('touchend', onPointerUp);
+
+    // 슬라이더 바 조작 핸들러
+    depthSlider.addEventListener('input', (e) => {
+      const pct = parseFloat(e.target.value) / 100;
+      const targetY = pct * PHYSICS.MAX_TRANSLATE_Y;
+      updatePhysics(targetY);
+    });
+
+    // 프리셋 버튼 지원
+    window.setImmersionState = function(targetRatio) {
+      let targetTranslateY = 0;
+      if (targetRatio === 0) {
+        targetTranslateY = 0;   // 공기 중
+      } else if (targetRatio === 0.5) {
+        targetTranslateY = 70;  // 절반 잠김 (35 + 35)
+      } else if (targetRatio === 1.0) {
+        targetTranslateY = 110; // 완전 잠김 직후
+      } else if (targetRatio === 1.5) {
+        targetTranslateY = 165; // 더 깊은 곳 탐구 (바닥 직전)
+      }
+      animateToY(targetTranslateY);
+    };
+
+    function animateToY(targetY) {
+      const startY = currentTranslateY;
+      const startTime = performance.now();
+      const duration = 300;
+
+      function step(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const ease = 0.5 - Math.cos(progress * Math.PI) / 2;
+        const currentY = startY + (targetY - startY) * ease;
+        updatePhysics(currentY);
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        }
+      }
+      requestAnimationFrame(step);
+    }
+
+    // 초기화 버튼
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      animateToY(0);
+      document.getElementById('rec-val-a').value = '';
+      document.getElementById('rec-val-b').value = '';
+      document.getElementById('rec-val-c').value = '';
+      document.getElementById('rec-val-d').value = '';
+      document.getElementById('rec-diff-b').value = '';
+      document.getElementById('rec-diff-c').value = '';
+      document.getElementById('rec-diff-d').value = '';
+      document.getElementById('table-feedback').textContent = '초기화되었습니다. 다시 실험해 보세요.';
+      document.getElementById('table-feedback').className = 'text-xs font-semibold text-slate-500';
+      document.getElementById('eval-result-box').classList.add('hidden');
+    });
+
+    // 힘 벡터 토글
+    document.getElementById('toggle-vectors').addEventListener('click', () => {
+      showVectors = !showVectors;
+      if (showVectors) {
+        vectorArrows.classList.remove('hidden');
+        document.getElementById('vector-btn-text').textContent = '힘 화살표 끄기';
+      } else {
+        vectorArrows.classList.add('hidden');
+        document.getElementById('vector-btn-text').textContent = '힘 화살표 켜기';
+      }
+      updatePhysics(currentTranslateY);
+    });
+
+    /* =========================================================================
+     * 5. 학생 실험 기록표 자동 입력 및 유효성 검사
+     * ========================================================================= */
+    const recValA = document.getElementById('rec-val-a');
+    const recValB = document.getElementById('rec-val-b');
+    const recValC = document.getElementById('rec-val-c');
+    const recValD = document.getElementById('rec-val-d');
+    const recDiffB = document.getElementById('rec-diff-b');
+    const recDiffC = document.getElementById('rec-diff-c');
+    const recDiffD = document.getElementById('rec-diff-d');
+
+    // [현재값 기록] 버튼: 현재 잠긴 상태에 맞는 칸에 값 기입
+    document.getElementById('auto-record-btn').addEventListener('click', () => {
+      const curF = currentForce.toFixed(2);
+      if (submersionRatio === 0) {
+        recValA.value = curF;
+        showToast('(가) 공기 중 측정값(2.00 N)이 기록되었습니다.');
+      } else if (submersionRatio >= 0.45 && submersionRatio <= 0.55) {
+        recValB.value = curF;
+        recDiffB.value = (PHYSICS.WEIGHT_IN_AIR - currentForce).toFixed(2);
+        showToast('(나) 절반 잠김 측정값 및 부력이 기록되었습니다.');
+      } else if (submersionRatio >= 0.98 && currentTranslateY < 130) {
+        recValC.value = curF;
+        recDiffC.value = (PHYSICS.WEIGHT_IN_AIR - currentForce).toFixed(2);
+        showToast('(다) 완전 잠김 측정값 및 부력이 기록되었습니다.');
+      } else if (currentTranslateY >= 130) {
+        recValD.value = curF;
+        recDiffD.value = (PHYSICS.WEIGHT_IN_AIR - currentForce).toFixed(2);
+        showToast('(라) 더 깊은 곳 측정값 및 부력이 기록되었습니다.');
+      } else {
+        showToast('정확한 위치[(가), (나), (다), (라)]를 맞춘 후 기록해 주세요!');
+      }
+    });
+
+    // 표 정답 검증 버튼
+    document.getElementById('verify-table-btn').addEventListener('click', () => {
+      const vA = parseFloat(recValA.value);
+      const vB = parseFloat(recValB.value);
+      const vC = parseFloat(recValC.value);
+      const vD = parseFloat(recValD.value);
+      const dB = parseFloat(recDiffB.value);
+      const dC = parseFloat(recDiffC.value);
+      const dD = parseFloat(recDiffD.value);
+
+      const tableFb = document.getElementById('table-feedback');
+
+      if (!vA || !vB || !vC) {
+        tableFb.textContent = '최소한 (가), (나), (다) 측정값을 먼저 입력해 주세요.';
+        tableFb.className = 'text-xs font-bold text-rose-500';
+        return;
+      }
+
+      const isA_ok = Math.abs(vA - 2.00) < 0.05;
+      const isB_ok = Math.abs(vB - 1.60) < 0.08;
+      const isC_ok = Math.abs(vC - 1.20) < 0.08;
+      const isD_ok = !vD || Math.abs(vD - 1.20) < 0.08; // (라)도 1.20N이어야 함!
+      const isDb_ok = dB ? Math.abs(dB - 0.40) < 0.08 : true;
+      const isDc_ok = dC ? Math.abs(dC - 0.80) < 0.08 : true;
+      const isDd_ok = dD ? Math.abs(dD - 0.80) < 0.08 : true;
+
+      if (isA_ok && isB_ok && isC_ok && isD_ok && isDb_ok && isDc_ok && isDd_ok) {
+        tableFb.textContent = '완벽합니다! 깊이 내려가도 부력(0.80N)은 동일함을 확인했습니다 👏';
+        tableFb.className = 'text-xs font-bold text-emerald-600';
+        if (!dB) recDiffB.value = '0.40';
+        if (!dC) recDiffC.value = '0.80';
+        if (!vD) recValD.value = '1.20';
+        if (!dD) recDiffD.value = '0.80';
+      } else {
+        tableFb.textContent = '측정값이나 부력 계산이 맞지 않습니다. 수치를 다시 확인해 보세요.';
+        tableFb.className = 'text-xs font-bold text-amber-600';
+      }
+    });
+
+    /* =========================================================================
+     * 6. 탐구 정리 퀴즈 및 오개념 피드백 처리
+     * ========================================================================= */
+    document.getElementById('check-quiz-btn').addEventListener('click', () => {
+      const q1Val = document.querySelector('input[name="q1"]:checked');
+      const q2bVal = parseFloat(document.getElementById('input-ans2-b').value);
+      const q2cVal = parseFloat(document.getElementById('input-ans2-c').value);
+      const q3Val = document.querySelector('input[name="q3"]:checked');
+      const q4Val = document.querySelector('input[name="q4"]:checked');
+      
+      const q1Fb = document.getElementById('q1-feedback');
+      const q2Fb = document.getElementById('q2-feedback');
+      const q3Fb = document.getElementById('q3-feedback');
+      const q4Fb = document.getElementById('q4-feedback');
+      const evalBox = document.getElementById('eval-result-box');
+
+      let allCorrect = true;
+
+      // 1번 문항 평가
+      if (!q1Val) {
+        q1Fb.textContent = '1번 답안을 선택해 주세요.';
+        q1Fb.className = 'text-xs mt-1.5 font-bold text-rose-500';
+        q1Fb.classList.remove('hidden');
+        allCorrect = false;
+      } else if (q1Val.value === 'c') {
+        q1Fb.textContent = '정답입니다! 물이 위로 밀어 올리는 힘(부력) 때문입니다.';
+        q1Fb.className = 'text-xs mt-1.5 font-bold text-emerald-600';
+        q1Fb.classList.remove('hidden');
+      } else {
+        q1Fb.textContent = '다시 생각해 보세요. 물속에서 무게가 줄어든 것처럼 느끼는 원인은 무엇일까요?';
+        q1Fb.className = 'text-xs mt-1.5 font-bold text-rose-500';
+        q1Fb.classList.remove('hidden');
+        allCorrect = false;
+      }
+
+      // 2번 문항 평가
+      if (isNaN(q2bVal) || isNaN(q2cVal)) {
+        q2Fb.textContent = '2번의 (나)와 (다) 부력 크기를 모두 직접 입력해 주세요.';
+        q2Fb.className = 'text-xs mt-1.5 font-bold text-rose-500';
+        q2Fb.classList.remove('hidden');
+        allCorrect = false;
+      } else {
+        const isQ2bCorrect = Math.abs(q2bVal - 0.40) < 0.05;
+        const isQ2cCorrect = Math.abs(q2cVal - 0.80) < 0.05;
+
+        if (isQ2bCorrect && isQ2cCorrect) {
+          q2Fb.textContent = '정답입니다! 부력은 감소한 무게(원래 무게 - 측정값)와 같습니다.';
+          q2Fb.className = 'text-xs mt-1.5 font-bold text-emerald-600';
+          q2Fb.classList.remove('hidden');
+        } else {
+          q2Fb.textContent = '부력의 크기를 다시 계산해 보세요. [(가)의 무게(2.00N) - 각 측정값]';
+          q2Fb.className = 'text-xs mt-1.5 font-bold text-amber-600';
+          q2Fb.classList.remove('hidden');
+          allCorrect = false;
+        }
+      }
+
+      // 3번 문항 평가
+      if (!q3Val) {
+        q3Fb.textContent = '3번 답안을 선택해 주세요.';
+        q3Fb.className = 'text-xs mt-1.5 font-bold text-rose-500';
+        q3Fb.classList.remove('hidden');
+        allCorrect = false;
+      } else if (q3Val.value === 'c') {
+        q3Fb.textContent = '정답입니다! 잠긴 부피가 클수록 밀려난 물의 양이 많아져 부력이 커집니다.';
+        q3Fb.className = 'text-xs mt-1.5 font-bold text-emerald-600';
+        q3Fb.classList.remove('hidden');
+      } else {
+        q3Fb.textContent = '절반 잠겼을 때(+40mL, 0.4N)와 완전히 잠겼을 때(+80mL, 0.8N)를 비교해 보세요.';
+        q3Fb.className = 'text-xs mt-1.5 font-bold text-rose-500';
+        q3Fb.classList.remove('hidden');
+        allCorrect = false;
+      }
+
+      // 4번 오개념 문항 평가
+      if (!q4Val) {
+        q4Fb.textContent = '4번 깊이 탐구 답안을 선택해 주세요.';
+        q4Fb.className = 'text-xs mt-1.5 font-bold text-rose-500';
+        q4Fb.classList.remove('hidden');
+        allCorrect = false;
+      } else if (q4Val.value === 'same') {
+        q4Fb.textContent = '대단해요! 완전 잠긴 후에는 밀려난 물의 부피가 같으므로 부력은 깊이에 상관없이 일정합니다.';
+        q4Fb.className = 'text-xs mt-1.5 font-bold text-purple-700';
+        q4Fb.classList.remove('hidden');
+      } else {
+        q4Fb.textContent = '오개념 주의! 수압은 깊을수록 커지지만, 물체가 밀어낸 물의 부피가 같으면 부력은 똑같습니다.';
+        q4Fb.className = 'text-xs mt-1.5 font-bold text-rose-500';
+        q4Fb.classList.remove('hidden');
+        allCorrect = false;
+      }
+
+      if (allCorrect) {
+        evalBox.classList.remove('hidden');
+        evalBox.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        evalBox.classList.add('hidden');
+      }
+    });
+
+    /* =========================================================================
+     * 7. 보고서 이미지 다운로드 기능 (5번 요구사항: html2canvas)
+     * ========================================================================= */
+    document.getElementById('download-report-btn').addEventListener('click', async () => {
+      const reportElement = document.getElementById('student-report-card');
+      showToast('보고서 이미지를 생성하고 있습니다. 잠시만 기다려 주세요...');
+
+      try {
+        const canvas = await html2canvas(reportElement, {
+          scale: 2, // 고해상도 캡처
+          useCORS: true,
+          backgroundColor: '#ffffff'
+        });
+
+        const imageURL = canvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        const today = new Date().toISOString().slice(0, 10);
+        downloadLink.href = imageURL;
+        downloadLink.download = `부력실험보고서_중1_${today}.png`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+
+        showToast('보고서 이미지가 성공적으로 다운로드되었습니다!');
+      } catch (err) {
+        console.error(err);
+        showToast('이미지 저장 중 오류가 발생했습니다. 브라우저 설정을 확인해 주세요.');
+      }
+    });
+
+    // 토스트 알림 메시지 유틸리티
+    function showToast(msg) {
+      const toast = document.createElement('div');
+      toast.className = 'fixed bottom-5 right-5 bg-slate-800 text-white text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-xl z-50 transition-opacity duration-300 flex items-center gap-2';
+      toast.innerHTML = `<i class="fa-solid fa-circle-info text-blue-400"></i> <span>${msg}</span>`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 2800);
+    }
+
+    // 초기 상태 렌더링
+    window.addEventListener('DOMContentLoaded', () => {
+      updatePhysics(0);
+    });
+  </script>
+</body>
+</html>
